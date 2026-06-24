@@ -1,0 +1,216 @@
+// ─────────────────────────────────────────────
+// /api/index.js — Web Dashboard (root page)
+// GET /  or  GET /api/index
+// ─────────────────────────────────────────────
+
+export default function handler(req, res) {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.status(200).send(`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Forex Scanner — لوحة التحكم</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+      background: #0d1117; color: #e6edf3;
+      min-height: 100vh; display: flex;
+      flex-direction: column; align-items: center;
+      padding: 24px 16px;
+    }
+    h1 { font-size: 1.5rem; margin-bottom: 6px; color: #58a6ff; }
+    .subtitle { color: #8b949e; font-size: 0.9rem; margin-bottom: 28px; }
+    .card {
+      background: #161b22; border: 1px solid #30363d;
+      border-radius: 12px; padding: 24px;
+      width: 100%; max-width: 420px; margin-bottom: 20px;
+    }
+    .status-row {
+      display: flex; align-items: center;
+      justify-content: space-between; margin-bottom: 16px;
+    }
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 16px; border-radius: 20px;
+      font-size: 1rem; font-weight: 600;
+    }
+    .badge.on  { background:#1a4731; color:#3fb950; border:1px solid #3fb950; }
+    .badge.off { background:#3d1a1a; color:#f85149; border:1px solid #f85149; }
+    .dot { width:10px; height:10px; border-radius:50%; animation:pulse 1.4s infinite; }
+    .on  .dot { background:#3fb950; }
+    .off .dot { background:#f85149; animation:none; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .tf-label { color:#8b949e; font-size:0.9rem; }
+    .tf-value { color:#58a6ff; font-weight:600; }
+    .btn-group { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
+    .btn-group.full { grid-template-columns:1fr; }
+    button {
+      padding:12px; border-radius:8px; border:none;
+      font-size:1rem; font-weight:600; cursor:pointer;
+      transition:opacity 0.15s, transform 0.1s;
+    }
+    button:hover  { opacity:0.85; }
+    button:active { transform:scale(0.97); }
+    .btn-start { background:#238636; color:#fff; }
+    .btn-stop  { background:#da3633; color:#fff; }
+    .btn-tf1, .btn-tf5 { background:#1f4068; color:#58a6ff; border:1px solid #58a6ff; }
+    .btn-scan  { background:#21262d; color:#e6edf3; border:1px solid #30363d; }
+    .btn-tf1.active, .btn-tf5.active { background:#58a6ff; color:#0d1117; }
+    .secret-wrap { margin-bottom:20px; width:100%; max-width:420px; }
+    .secret-wrap label { display:block; color:#8b949e; font-size:0.85rem; margin-bottom:6px; }
+    .secret-wrap input {
+      width:100%; padding:10px 14px; background:#161b22;
+      border:1px solid #30363d; border-radius:8px;
+      color:#e6edf3; font-size:0.95rem;
+    }
+    .pairs-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-top:16px; }
+    .pair-item {
+      background:#21262d; border:1px solid #30363d;
+      border-radius:8px; padding:10px 12px; font-size:0.85rem;
+    }
+    .pair-item .sym { font-weight:700; color:#e6edf3; }
+    .pair-item .sig { font-size:0.8rem; color:#8b949e; margin-top:2px; }
+    .pair-item.up   { border-color:#3fb950; }
+    .pair-item.down { border-color:#f85149; }
+    .pair-item.pre  { border-color:#d29922; }
+    #toast {
+      position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+      background:#238636; color:#fff; padding:10px 24px;
+      border-radius:8px; font-size:0.9rem; opacity:0;
+      transition:opacity 0.3s; pointer-events:none;
+    }
+    #toast.show { opacity:1; }
+    .section-title { color:#8b949e; font-size:0.8rem; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:10px; }
+  </style>
+</head>
+<body>
+  <h1>📡 Forex Scanner</h1>
+  <p class="subtitle">لوحة تحكم البوت</p>
+
+  <div class="secret-wrap">
+    <label>🔑 كلمة السر (CRON_SECRET)</label>
+    <input type="password" id="secret" placeholder="أدخل كلمة السر..."/>
+  </div>
+
+  <div class="card">
+    <div class="status-row">
+      <div>
+        <div class="section-title">حالة البوت</div>
+        <div id="statusBadge" class="badge off"><span class="dot"></span> <span id="statusText">متوقف</span></div>
+      </div>
+      <div style="text-align:left">
+        <div class="tf-label">الإطار الزمني</div>
+        <div class="tf-value" id="tfDisplay">—</div>
+      </div>
+    </div>
+    <div class="btn-group">
+      <button class="btn-start" onclick="control('start')">▶️ تشغيل</button>
+      <button class="btn-stop"  onclick="control('stop')">⏹ إيقاف</button>
+    </div>
+    <div class="btn-group">
+      <button class="btn-tf1" id="btnTf1" onclick="control('tf1')">⏱ دقيقة</button>
+      <button class="btn-tf5" id="btnTf5" onclick="control('tf5')">⏱ 5 دقائق</button>
+    </div>
+    <div class="btn-group full">
+      <button class="btn-scan" onclick="triggerScan()">🔍 سكان يدوي الآن</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">آخر إشارات الأزواج</div>
+    <div class="pairs-grid" id="pairsGrid">
+      <div class="pair-item"><div class="sym">جاري التحميل...</div></div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+<script>
+const PAIRS = ["EURUSD","USDJPY","GBPUSD","USDCHF","AUDUSD","USDCAD","NZDUSD"];
+
+function getSecret() { return document.getElementById("secret").value.trim(); }
+
+function showToast(msg, color="#238636") {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.style.background = color;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2500);
+}
+
+async function control(action) {
+  const secret = getSecret();
+  if (!secret) { showToast("أدخل كلمة السر أولاً","#da3633"); return; }
+  try {
+    const r = await fetch("/api/control", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({action, secret}),
+    });
+    const d = await r.json();
+    if (d.error) { showToast("خطأ: "+d.error,"#da3633"); return; }
+    updateUI(d.state);
+    const labels = {start:"✅ البوت شغّال",stop:"🛑 البوت متوقف",tf1:"⏱ دقيقة واحدة",tf5:"⏱ 5 دقائق"};
+    showToast(labels[action]||"تم");
+  } catch(e) { showToast("خطأ في الاتصال","#da3633"); }
+}
+
+async function triggerScan() {
+  const secret = getSecret();
+  if (!secret) { showToast("أدخل كلمة السر أولاً","#da3633"); return; }
+  showToast("جاري السكان...","#1f4068");
+  try {
+    const r = await fetch("/api/scan", { headers:{"Authorization":"Bearer "+secret} });
+    const d = await r.json();
+    if (d.skipped) { showToast("البوت متوقف — شغّله أولاً","#d29922"); return; }
+    renderPairs(d.results||[]);
+    showToast("✅ تم السكان — "+(d.alerts||0)+" إشارات");
+  } catch(e) { showToast("خطأ في السكان","#da3633"); }
+}
+
+function updateUI(state) {
+  if (!state) return;
+  const active = state.botActive;
+  const badge = document.getElementById("statusBadge");
+  badge.className = "badge "+(active?"on":"off");
+  document.getElementById("statusText").textContent = active?"يعمل":"متوقف";
+  const tf = state.timeframe;
+  document.getElementById("tfDisplay").textContent = tf==="5"?"5 دقائق":"دقيقة";
+  document.getElementById("btnTf1").classList.toggle("active", tf==="1");
+  document.getElementById("btnTf5").classList.toggle("active", tf==="5");
+  if (state.signals) {
+    const pairs = PAIRS.map(sym=>({symbol:sym, signal:state.signals[sym+"_"+tf]||null}));
+    renderPairs(pairs);
+  }
+}
+
+function renderPairs(pairs) {
+  const grid = document.getElementById("pairsGrid");
+  const sigLabel = {
+    "UP":"🟢 صعود ⬆️","DOWN":"🔴 هبوط ⬇️",
+    "PRE_UP":"🟡 تحضير صعود","PRE_DOWN":"🟡 تحضير هبوط",
+    null:"⚪ لا إشارة"
+  };
+  const cls = {"UP":"up","DOWN":"down","PRE_UP":"pre","PRE_DOWN":"pre"};
+  grid.innerHTML = pairs.map(p=>{
+    const sig = p.signal||p.sig||null;
+    const price = p.price?'<span style="color:#8b949e;font-size:0.75rem">'+p.price+'</span>':"";
+    return '<div class="pair-item '+(cls[sig]||'')+'"><div class="sym">'+p.symbol+" "+price+'</div><div class="sig">'+(sigLabel[sig]||sigLabel[null])+'</div></div>';
+  }).join("");
+}
+
+async function loadStatus() {
+  try {
+    const r = await fetch("/api/status");
+    const d = await r.json();
+    updateUI(d);
+  } catch(e) {}
+}
+
+loadStatus();
+setInterval(loadStatus, 30000);
+</script>
+</body>
+</html>`);
+}

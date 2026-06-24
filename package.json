@@ -1,0 +1,7 @@
+{
+  "name": "forex-bb-rsi-scanner",
+  "version": "2.0.0",
+  "description": "Forex BB+RSI scanner with Telegram bot control, web dashboard, PRE+CONFIRM signals",
+  "type": "module",
+  "engines": { "node": ">=18.x" }
+}
